@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 使用映射接口的方式， 命名空间的值必须与映射接口的全限定名一致 -->
+<mapper namespace="com.yc.mapper.FunctionMapper">
+		<cache/>
+	<select id="findnextFunction" parameterType="map" resultType="Function">
+		select * from auth_function where parent_id=(select fid from auth_function where fname=#{rName}) and fid in (select function_id from auth_role_function where role_id in (select role_id from auth_user_role where user_id=#{uid})) and status='是'
+	</select>
+	
+	<update id="update" parameterType="Function">
+		update auth_function
+		<set>
+			<if test="fname!=null">
+				fname=#{fname},
+			</if>
+			<if test="parent_id!=null">
+				parent_id=#{parent_id},
+			</if>
+			<if test="url!=null">
+				url=#{url},
+			</if>
+			<if test="serial_num!=null">
+				serial_num=#{serial_num},
+			</if>	
+			<if test="accordion!=null">
+				accordion=#{accordion}
+			</if>		
+		</set>
+		<if test="fid!=null">
+			where fid=#{fid}
+		</if>
+	</update>
+	
+	<delete id="deleteById" parameterType="Function">
+  		delete from auth_function where fid=#{fid}
+  	</delete>
+  	
+  	<resultMap id="FunctionTreeMap"  type="FunctionTree"  >
+  			<id property="id"  column="fid"/>
+  			<result property="text" column="fname"/>
+  			<collection property="children"  column="uid"  ofType="FunctionTree" >
+  						<id property="id"  column="fids"/>
+  						<result property="text" column="fnames"/>
+  						<collection property="children"  column="uid"  ofType="FunctionTree"  >
+  									<id property="id"  column="fidss"/>
+  									<result property="text" column="fnamess"/>
+  						</collection> 
+  						
+  			</collection>
+  	</resultMap>
+  	<select id="functionTree"  parameterType="map"  resultMap="FunctionTreeMap">
+  		 select  * from 
+		(select fid,fname,parent_id from auth_function where parent_id not in (select fid from auth_function)) x
+		left join
+		(select b.fid fids,b.fname fnames,b.parent_id parent_ids from (select * from auth_function where fid in (select function_id from auth_role_function where role_id in (select role_id from auth_user_role where user_id=#{uid}) and status=1)) b where b.accordion=(select min(a.accordion) from (select * from auth_function where fid in (select function_id from auth_role_function where role_id in (select role_id from auth_user_role where user_id=#{uid}))) a)) y
+		on x.fid=y.parent_ids left join 
+		(select fid fidss,fname fnamess,parent_id parent_idss from auth_function where fid in (select function_id from auth_role_function where role_id in (select role_id from auth_user_role where user_id=#{uid}) and status=1)) z on y.fids=z.parent_idss
+  	</select>
+  	
+  	<resultMap id="updateFunctionTreeMap"  type="FunctionTree"  >
+  			<id property="id"  column="fid"/>
+  			<result property="text" column="fname"/>
+  			<collection property="children"  column="uid"  ofType="FunctionTree" >
+  						<id property="id"  column="fids"/>
+  						<result property="text" column="fnames"/>
+  						<collection property="children"  column="uid"  ofType="FunctionTree"  >
+  									<id property="id"  column="fidss"/>
+  									<result property="text" column="fnamess"/>
+  									<result property="checked"  column="checked"/>
+  						</collection> 
+  						
+  			</collection>
+  	</resultMap>
+  	
+  	<select id="updateFunctionTree" parameterType="map" resultMap="updateFunctionTreeMap">
+  				 select * from (select  * from 
+		(select fid,fname,parent_id from auth_function where parent_id not in (select fid from auth_function)) x
+		left join
+		(select b.fid fids,b.fname fnames,b.parent_id parent_ids from (select * from auth_function where fid in (select function_id from auth_role_function where role_id in (select role_id from auth_user_role where user_id=#{uid}) and status=1)) b where b.accordion=(select min(a.accordion) from (select * from auth_function where fid in (select function_id from auth_role_function where role_id in (select role_id from auth_user_role where user_id=#{uid}))) a)) y
+		on x.fid=y.parent_ids left join 
+		(select fid fidss,fname fnamess,parent_id parent_idss from auth_function where fid in (select function_id from auth_role_function where role_id in (select role_id from auth_user_role where user_id=#{uid}) and status=1)) z on y.fids=z.parent_idss) m left join ( select fid checked from auth_function where fid in(select function_id from auth_role_function where role_id=#{rid})) n on m.fidss=n.checked
+  	
+  	</select>
+	
+	<resultMap type="TempPage" id="FunctionMap">
+			<id property="total" column="total"/>
+			<collection property="rows" column="parent_id" ofType="Function">
+					<id column="fid" property="fid"/>
+					<result property="fname" column="fname"/>
+					<result property="parent_id" column="parent_id"/>
+					<result property="url" column="url"/>
+					<result property="serialNum" column="serial_num"/>
+					<result column="accordion" property="accordion"/>
+					<result column="status" property="status"/>
+			</collection>
+	</resultMap>
+	
+	<select id="findFunctionByPages" parameterType="map" resultMap="FunctionMap">
+			select*,(select count(1) from auth_function where parent_id=#{parent_id}) total from auth_function where parent_id=#{parent_id} limit #{page},#{rows};
+	</select>
+	
+	<update id="updateFunction" parameterType="map">
+			
+			update auth_function
+            <trim prefix="set" suffixOverrides=",">
+             <trim prefix="fname=case" suffix="end,">
+                 <foreach collection="list" item="i" index="index">
+                         <if test="i.fid!=null">
+                          when fid=#{i.fid} then #{i.fname}
+                         </if>
+                 </foreach>
+              </trim>
+              <trim prefix=" url=case" suffix="end,">
+                 <foreach collection="list" item="i" index="index">
+                         <if test="i.url!=null">
+                          when fid=#{i.fid} then #{i.url}
+                         </if>
+                 </foreach>
+              </trim>
+              <trim prefix=" status=case" suffix="end,">
+                 <foreach collection="list" item="i" index="index">
+                         <if test="i.status!=null">
+                          when fid=#{i.fid} then #{i.status}
+                         </if>
+                 </foreach>
+              </trim>
+             </trim>
+            where
+            <foreach collection="list" separator="or" item="i" index="index" >
+              fid=#{i.fid}
+          </foreach>
+			
+	</update>
+</mapper>
